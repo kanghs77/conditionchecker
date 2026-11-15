@@ -25,9 +25,9 @@ Run lint and typecheck before declaring any task done.
 
 ## Navigation & Routing
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+This app intentionally does NOT use Expo Router: it has three tabs plus a full-screen survey modal, switched with plain state in `App.tsx`. Screens live in `src/screens/`, data access in `src/db.ts` (expo-sqlite), daily reminders in `src/notifications.ts`, exports in `src/export.ts`.
+
+`npx expo install` needs api.expo.dev; if it is blocked, run it with `EXPO_OFFLINE=1`.
 
 ## Building with EAS
 
