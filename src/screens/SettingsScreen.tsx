@@ -5,7 +5,7 @@ import { Button, Card, SectionTitle, colors } from '../components/ui';
 import { addReminder, deleteReminder, listReminders, updateReminder } from '../db';
 import { formatTime } from '../dates';
 import { ExportKind, exportData } from '../export';
-import { syncReminders } from '../notifications';
+import { requestExactAlarmPermission, scheduleTestNotification, syncReminders } from '../notifications';
 import { Reminder } from '../types';
 
 type PickerTarget = { mode: 'new' } | { mode: 'edit'; reminder: Reminder };
@@ -27,13 +27,15 @@ export default function SettingsScreen() {
   const [picker, setPicker] = useState<PickerTarget | null>(null);
   const [pickerTime, setPickerTime] = useState(new Date());
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [exactDenied, setExactDenied] = useState(false);
   const [busy, setBusy] = useState<ExportKind | null>(null);
 
   const reload = useCallback(async () => setReminders(await listReminders()), []);
 
   const resync = useCallback(async () => {
-    const { granted } = await syncReminders();
+    const { granted, exact } = await syncReminders();
     setPermissionDenied(!granted);
+    setExactDenied(!exact);
     await reload();
   }, [reload]);
 
@@ -87,6 +89,20 @@ export default function SettingsScreen() {
           <Button title="설정에서 알림 허용하기" variant="secondary" onPress={() => Linking.openSettings()} style={{ marginTop: 10 }} />
         </Card>
       )}
+      {!permissionDenied && exactDenied && (
+        <Card style={{ backgroundColor: '#FFF6E5' }}>
+          <Text style={styles.warn}>'알람 및 리마인더' 권한이 없어 알림이 늦게 오거나, 앱을 열어야 울릴 수 있어요.</Text>
+          <Button
+            title="알람 권한 허용하기"
+            variant="secondary"
+            onPress={async () => {
+              await requestExactAlarmPermission();
+              await resync();
+            }}
+            style={{ marginTop: 10 }}
+          />
+        </Card>
+      )}
       {reminders.map((r) => (
         <Card key={r.id} style={styles.row}>
           <Pressable style={{ flex: 1 }} onPress={() => openPicker({ mode: 'edit', reminder: r })}>
@@ -112,6 +128,18 @@ export default function SettingsScreen() {
         </Card>
       ))}
       <Button title="+ 알림 시각 추가" variant="secondary" onPress={() => openPicker({ mode: 'new' })} />
+      <Button
+        title="🔔 1분 뒤 테스트 알림 보내기"
+        variant="ghost"
+        onPress={async () => {
+          await scheduleTestNotification(60);
+          Alert.alert(
+            '1분 뒤에 알림이 와요',
+            '앱을 닫고 화면을 끈 채로 기다려 보세요.\n\n안 오면: 설정 → 애플리케이션 → 컨디션 체커 → 배터리 → "제한 없음"으로 바꿔 주세요.',
+          );
+        }}
+        style={{ marginTop: 4 }}
+      />
 
       {picker && (
         <Card style={{ marginTop: 12 }}>

@@ -18,7 +18,11 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.conditionchecker.app"
+      "package": "com.conditionchecker.app",
+      "permissions": [
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
