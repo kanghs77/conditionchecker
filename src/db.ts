@@ -10,7 +10,7 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
   return dbPromise;
 }
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 async function init(): Promise<SQLite.SQLiteDatabase> {
   const db = await SQLite.openDatabaseAsync('condition.db');
@@ -65,7 +65,11 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
       await db.runAsync('INSERT INTO reminders (hour, minute, enabled) VALUES (21, 30, 1)');
     });
   }
-  // 향후 스키마 변경은 여기서 `if (version < 2) { ... }` 식으로 추가한다.
+  if (version < 2) {
+    // 답변별 비고
+    await db.execAsync('ALTER TABLE answers ADD COLUMN note TEXT');
+  }
+  // 향후 스키마 변경은 여기서 `if (version < 3) { ... }` 식으로 추가한다.
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return db;
 }
@@ -217,6 +221,7 @@ interface AnswerRow {
   entry_id: number;
   question_id: number;
   value: string;
+  note: string | null;
   answered_at: string;
 }
 
@@ -224,6 +229,7 @@ const mapAnswer = (r: AnswerRow): Answer => ({
   entryId: r.entry_id,
   questionId: r.question_id,
   value: r.value,
+  note: r.note,
   answeredAt: r.answered_at,
 });
 
@@ -239,12 +245,12 @@ export async function listAllAnswers(): Promise<Answer[]> {
   return rows.map(mapAnswer);
 }
 
-export async function saveAnswer(entryId: number, questionId: number, value: string): Promise<void> {
+export async function saveAnswer(entryId: number, questionId: number, value: string, note: string | null = null): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO answers (entry_id, question_id, value, answered_at) VALUES (?, ?, ?, ?)
-     ON CONFLICT(entry_id, question_id) DO UPDATE SET value=excluded.value, answered_at=excluded.answered_at`,
-    entryId, questionId, value, nowIso(),
+    `INSERT INTO answers (entry_id, question_id, value, note, answered_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(entry_id, question_id) DO UPDATE SET value=excluded.value, note=excluded.note, answered_at=excluded.answered_at`,
+    entryId, questionId, value, note, nowIso(),
   );
 }
 

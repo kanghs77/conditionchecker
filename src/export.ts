@@ -54,15 +54,25 @@ function describeValues(q: Question): string {
 /** 날짜 1행 × 질문 1열 (분석용 기본 형태). 빈 칸 = 답하지 않음 */
 function buildWide(ds: Dataset): string {
   const qs = exportedQuestions(ds);
-  const byEntry = new Map<number, Map<number, string>>();
+  const byEntry = new Map<number, Map<number, Answer>>();
+  const noted = new Set<number>(); // 비고가 한 번이라도 적힌 질문만 <key>_note 열을 만든다
   for (const a of ds.answers) {
     if (!byEntry.has(a.entryId)) byEntry.set(a.entryId, new Map());
-    byEntry.get(a.entryId)!.set(a.questionId, a.value);
+    byEntry.get(a.entryId)!.set(a.questionId, a);
+    if (a.note) noted.add(a.questionId);
   }
-  const header = ['date', 'weekday', 'completed', ...qs.map((q) => q.key)];
+  const cols: { q: Question; note: boolean }[] = qs.flatMap((q) =>
+    noted.has(q.id) ? [{ q, note: false }, { q, note: true }] : [{ q, note: false }],
+  );
+  const header = ['date', 'weekday', 'completed', ...cols.map((c) => (c.note ? `${c.q.key}_note` : c.q.key))];
   const rows = ds.entries.map((e) => {
-    const m = byEntry.get(e.id) ?? new Map<number, string>();
-    return [e.date, weekdayOf(e.date), e.completedAt ? 1 : 0, ...qs.map((q) => m.get(q.id) ?? '')];
+    const m = byEntry.get(e.id) ?? new Map<number, Answer>();
+    return [
+      e.date,
+      weekdayOf(e.date),
+      e.completedAt ? 1 : 0,
+      ...cols.map((c) => (c.note ? m.get(c.q.id)?.note : m.get(c.q.id)?.value) ?? ''),
+    ];
   });
   return toCsv([header, ...rows]);
 }
@@ -71,12 +81,12 @@ function buildWide(ds: Dataset): string {
 function buildLong(ds: Dataset): string {
   const qMap = new Map(ds.questions.map((q) => [q.id, q]));
   const eMap = new Map(ds.entries.map((e) => [e.id, e]));
-  const header = ['date', 'question_key', 'question_text', 'role', 'category', 'type', 'value', 'answered_at'];
+  const header = ['date', 'question_key', 'question_text', 'role', 'category', 'type', 'value', 'note', 'answered_at'];
   const rows = ds.answers
     .map((a) => ({ a, q: qMap.get(a.questionId), e: eMap.get(a.entryId) }))
     .filter((x) => x.q && x.e)
     .sort((x, y) => x.e!.date.localeCompare(y.e!.date) || x.q!.sortOrder - y.q!.sortOrder)
-    .map(({ a, q, e }) => [e!.date, q!.key, q!.text, q!.role, q!.category, q!.type, a.value, a.answeredAt]);
+    .map(({ a, q, e }) => [e!.date, q!.key, q!.text, q!.role, q!.category, q!.type, a.value, a.note, a.answeredAt]);
   return toCsv([header, ...rows]);
 }
 
@@ -111,13 +121,14 @@ function buildLlmMarkdown(ds: Dataset): string {
 1. **결과 지표**(몸 컨디션·정신 상태·집중도 등)에 가장 크게 영향을 주는 **영향 요인**을 찾아 주세요. 상관계수나 그룹 간 평균 차이(예: 운동한 날 vs 안 한 날) 등 근거 수치를 함께 보여 주세요.
 2. **하루 지연 효과**도 확인해 주세요. (예: 전날 음주·수면이 다음 날 집중도에 미치는 영향)
 3. 요일별 패턴, 추세(좋아지는지/나빠지는지)가 있는지 알려 주세요.
-4. 자유 메모(text 타입)에서 반복되는 사건이나 키워드가 점수와 관련 있는지 봐 주세요.
+4. 자유 메모(text 타입)와 비고(_note 열)에서 반복되는 사건이나 키워드가 점수와 관련 있는지 봐 주세요.
 5. 표본 수가 적어 확신하기 어려운 결론은 따로 표시해 주세요. 상관관계와 인과관계를 구분해 주세요.
 6. 마지막으로, 내가 다음 2~4주 동안 시도해 볼 수 있는 구체적인 실험(한 번에 한 변수만 바꾸기)을 제안해 주세요.
 
 ## 변수 설명 (data dictionary)
 - 영향 요인(factor) = 원인 후보, 결과 지표(outcome) = 내가 개선하고 싶은 상태
 - 빈 칸 = 그날 답하지 않음 (0이 아님)
+- \`<변수명>_note\` 열 = 그 질문에 답하면서 내가 적은 비고. 수치의 맥락으로 참고해 주세요.
 
 | 변수명 | 질문 | 역할 | 분류 | 형식 | 값 |
 |---|---|---|---|---|---|

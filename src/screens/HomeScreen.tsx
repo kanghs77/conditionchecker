@@ -112,7 +112,7 @@ export default function HomeScreen({ refreshKey, onStartSurvey }: Props) {
       {entries.length === 0 && <Text style={styles.empty}>아직 기록이 없어요.</Text>}
       {entries.map((e) => {
         const ans = answersByEntry.get(e.id) ?? [];
-        const m = new Map(ans.map((a) => [a.questionId, a.value]));
+        const m = new Map(ans.filter((a) => a.value !== '').map((a) => [a.questionId, a.value]));
         return (
           <Pressable key={e.id} onPress={() => setDetail(e)}>
             <Card style={styles.entryRow}>
@@ -184,6 +184,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export function formatAnswer(q: Question | undefined, value: string): string {
+  if (value === '') return '(답 없음)';
   if (!q) return value;
   if (q.type === 'yesno') return value === '1' ? '예' : '아니오';
   if (q.type === 'number' && q.unit) return `${value} ${q.unit}`;
@@ -226,6 +227,7 @@ function EntryDetail({
             <Card key={a.questionId}>
               <Text style={styles.entryMeta}>{q?.text ?? '(삭제된 질문)'}</Text>
               <Text style={styles.answerVal}>{formatAnswer(q, a.value)}</Text>
+              {a.note ? <Text style={styles.note}>비고: {a.note}</Text> : null}
             </Card>
           );
         })}
@@ -254,5 +256,6 @@ const styles = StyleSheet.create({
   scoreLabel: { fontSize: 10, color: colors.sub },
   detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
   detailTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  note: { fontSize: 14, color: colors.sub, marginTop: 6, lineHeight: 20 },
   answerVal: { fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 6 },
 });

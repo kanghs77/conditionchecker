@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, Chip, SectionTitle, colors } from '../components/ui';
 import { createQuestion, deleteQuestion, isKeyTaken, listQuestions, reorderQuestions, setQuestionActive, updateQuestion } from '../db';
@@ -180,6 +180,7 @@ function QuestionEditor({
         <Text style={styles.editorTitle}>{initial ? '질문 수정' : '새 질문'}</Text>
         <Button title="저장" variant="ghost" textStyle={{ color: colors.primary }} onPress={save} />
       </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <SectionTitle>질문</SectionTitle>
         <TextInput value={text} onChangeText={setText} placeholder="예: 물을 의도적으로 마셨습니까?" style={styles.input} multiline />
@@ -244,6 +245,7 @@ function QuestionEditor({
           <Switch value={active} onValueChange={setActive} />
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

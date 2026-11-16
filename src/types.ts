@@ -38,7 +38,8 @@ export interface Entry {
 export interface Answer {
   entryId: number;
   questionId: number;
-  value: string;
+  value: string; // 비고만 남기고 답을 고르지 않은 경우 빈 문자열
+  note: string | null; // 비고
   answeredAt: string;
 }
 

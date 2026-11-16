@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,6 +25,10 @@ export default function SurveyScreen({ date, onClose }: Props) {
   const [values, setValues] = useState<Record<number, string>>({});
   const [index, setIndex] = useState(0);
   const [draft, setDraft] = useState('');
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const entryIdRef = useRef<number | null>(null);
   const advancing = useRef(false);
 
@@ -34,11 +37,16 @@ export default function SurveyScreen({ date, onClose }: Props) {
       const qs = (await listQuestions()).filter((q) => q.active);
       const entry = await getEntryByDate(date);
       const prev: Record<number, string> = {};
+      const prevNotes: Record<number, string> = {};
       if (entry) {
         entryIdRef.current = entry.id;
-        for (const a of await getAnswers(entry.id)) prev[a.questionId] = a.value;
+        for (const a of await getAnswers(entry.id)) {
+          prev[a.questionId] = a.value;
+          if (a.note) prevNotes[a.questionId] = a.note;
+        }
       }
       setValues(prev);
+      setNotes(prevNotes);
       setQuestions(qs);
     })();
   }, [date]);
@@ -49,7 +57,10 @@ export default function SurveyScreen({ date, onClose }: Props) {
 
   // 숫자/텍스트 질문으로 이동하면 기존 답을 입력창에 채운다.
   useEffect(() => {
-    if (q) setDraft(values[q.id] ?? '');
+    if (!q) return;
+    setDraft(values[q.id] ?? '');
+    setNoteDraft(notes[q.id] ?? '');
+    setNoteOpen(!!notes[q.id]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q?.id]);
 
@@ -64,12 +75,18 @@ export default function SurveyScreen({ date, onClose }: Props) {
 
   async function answer(value: string, autoAdvance: boolean) {
     if (!q || advancing.current) return;
-    if (value === '') return skip();
+    const note = noteOpen && q.type !== 'text' ? noteDraft.trim() : '';
+    if (value === '' && !note) return skip();
     advancing.current = true;
     setValues((v) => ({ ...v, [q.id]: value }));
-    await saveAnswer(await ensureEntry(), q.id, value);
-    if (autoAdvance) await new Promise((r) => setTimeout(r, 180));
-    setIndex((i) => i + 1);
+    setNotes((n) => ({ ...n, [q.id]: note }));
+    await saveAnswer(await ensureEntry(), q.id, value, note || null);
+    // 비고 칸이 열려 있으면 답을 눌러도 넘어가지 않고, "다음" 버튼으로 넘어간다.
+    const stay = noteOpen && autoAdvance;
+    if (!stay) {
+      if (autoAdvance) await new Promise((r) => setTimeout(r, 180));
+      setIndex((i) => i + 1);
+    }
     advancing.current = false;
   }
 
@@ -78,6 +95,11 @@ export default function SurveyScreen({ date, onClose }: Props) {
     if (values[q.id] !== undefined && entryIdRef.current !== null) {
       await clearAnswer(entryIdRef.current, q.id);
       setValues((v) => {
+        const n = { ...v };
+        delete n[q.id];
+        return n;
+      });
+      setNotes((v) => {
         const n = { ...v };
         delete n[q.id];
         return n;
@@ -105,7 +127,7 @@ export default function SurveyScreen({ date, onClose }: Props) {
   }
 
   if (done) {
-    const answered = questions.filter((x) => values[x.id] !== undefined).length;
+    const answered = questions.filter((x) => values[x.id] !== undefined && values[x.id] !== '').length;
     return (
       <SafeAreaView style={[styles.root, styles.center]}>
         <Text style={{ fontSize: 56 }}>🎉</Text>
@@ -121,7 +143,7 @@ export default function SurveyScreen({ date, onClose }: Props) {
 
   return (
     <SafeAreaView style={styles.root}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <View style={styles.header}>
           <Pressable onPress={onClose} hitSlop={12}>
             <Text style={styles.close}>✕</Text>
@@ -135,7 +157,7 @@ export default function SurveyScreen({ date, onClose }: Props) {
           <View style={[styles.progressFill, { width: `${((index + 1) / total) * 100}%` }]} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Text style={styles.category}>{q!.category}</Text>
           <Text style={styles.qText}>{q!.text}</Text>
           <AnswerInput
@@ -146,6 +168,29 @@ export default function SurveyScreen({ date, onClose }: Props) {
             setDraft={setDraft}
             onAnswer={answer}
           />
+
+          {q!.type !== 'text' &&
+            (noteOpen ? (
+              <View style={{ marginTop: 28 }}>
+                <Text style={styles.noteLabel}>비고</Text>
+                <TextInput
+                  value={noteDraft}
+                  onChangeText={setNoteDraft}
+                  placeholder="이 답에 덧붙일 내용 (선택)"
+                  multiline
+                  autoFocus={!notes[q!.id]}
+                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
+                  style={styles.noteInput}
+                />
+                {q!.type !== 'number' && (
+                  <Button title="다음" onPress={() => answer(values[q!.id] ?? '', false)} style={{ marginTop: 12 }} />
+                )}
+              </View>
+            ) : (
+              <Pressable onPress={() => setNoteOpen(true)} hitSlop={8} style={{ marginTop: 28, alignSelf: 'flex-start' }}>
+                <Text style={styles.noteAdd}>＋ 비고 추가</Text>
+              </Pressable>
+            ))}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -341,6 +386,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 14,
     padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    textAlignVertical: 'top',
+    color: colors.text,
+  },
+  noteLabel: { fontSize: 13, fontWeight: '700', color: colors.sub, marginBottom: 6 },
+  noteAdd: { color: colors.primary, fontWeight: '600', fontSize: 15 },
+  noteInput: {
+    minHeight: 80,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: colors.border,
     textAlignVertical: 'top',
